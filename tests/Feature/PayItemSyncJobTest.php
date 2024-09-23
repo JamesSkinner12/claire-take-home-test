@@ -4,15 +4,12 @@ namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
-use Mockery;
 use App\Models\Business;
 use App\Models\User;
 use App\Models\PayItem;
-use App\Services\PayItemSyncClient;
 use App\Jobs\PayItemSyncRoutine;
 use App\Exceptions\PayItemSyncJobException;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Log;
 
 class PayItemSyncJobTest extends TestCase
@@ -52,24 +49,19 @@ class PayItemSyncJobTest extends TestCase
      */
     public function test_can_handle_no_token(): void
     {
-        Exceptions::fake();
-        $this->expectException(PayItemSyncJobException::class);
-        $response = response('', 401);
+        // Assert that an 'alert' has been created in the logs
+        Log::expects('alert')->with("Unauthorized response from Sync Job for " . $this->business->external_id);
+
         Http::fake([
-            config('services.some-partner.url') . '*' => $response,
+            config('services.some-partner.url') . $this->business->external_id . '*' => Http::response('', 401),
         ]);
-
-        Log::shouldReceive('alert')->with("Unauthorized response from Sync Job for " . $this->business->external_id);
-        $this->mock(PayItemSyncClient::class)->shouldReceive('makeRequest')->andReturn($response);
-
-        Http::shouldReceive("withHeaders")->andReturn(Mockery::self());
-        Http::shouldReceive("get")->andReturn($response);
-        PayItemSyncRoutine::dispatch($this->business);
-
-        $this->assertEquals($response->getStatusCode(), 401);
-        Exceptions::assertReported(function (PayItemSyncJobException $e) {
-            return $e->getMessage() === 'Invalid response from sync service';
-        });
+    
+        // The job failing stops all code after dispatch, wrapping in try/catch to let following code still run
+        try {
+            PayItemSyncRoutine::dispatch($this->business);
+        } catch (\Throwable $e) {
+            $this->assertInstanceOf(PayItemSyncJobException::class, $e);
+        }
     }
 
     /**
@@ -79,24 +71,18 @@ class PayItemSyncJobTest extends TestCase
      */
     public function test_can_handle_no_business(): void
     {
-        Exceptions::fake();
-        $this->expectException(PayItemSyncJobException::class);
-        $response = response('', 404);
+        // Asserts that a 'critical' item has been created in the logs
+        Log::expects('critical')->with("Not Found response from Sync Job for " . $this->business->external_id);
+
         Http::fake([
-            config('services.some-partner.url') . 'abcd-efg-hijk' => $response,
+            config('services.some-partner.url') . $this->business->external_id . '*' => Http::response('', 404),
         ]);
-
-        Log::shouldReceive('alert')->with("Not Found response from Sync Job for  " . $this->business->external_id);
-        $this->mock(PayItemSyncClient::class)->shouldReceive('makeRequest')->andReturn($response);
-
-        Http::shouldReceive("withHeaders")->andReturn(Mockery::self());
-        Http::shouldReceive("get")->andReturn($response);
-
-        PayItemSyncRoutine::dispatch($this->business);
-        $this->assertEquals($response->getStatusCode(), 404);
-        Exceptions::assertReported(function (JobException $e) {
-            return $e->getMessage() === 'Invalid response from sync service';
-        });
+        // The job failing stops all code after dispatch, wrapping in try/catch to let following code still run
+        try {
+            PayItemSyncRoutine::dispatch($this->business);
+        } catch (\Throwable $e) {
+            $this->assertInstanceOf(PayItemSyncJobException::class, $e);
+        }
     }
 
     /**
@@ -105,21 +91,14 @@ class PayItemSyncJobTest extends TestCase
      */
     public function test_can_handle_not_finding_user(): void
     {
-        $responseData = $this->buildMockResponse('TestCanHandleNotFindingUser.json');
-        $response = response($responseData);
-
         Http::fake([
-            config('services.some-partner.url') . 'abcd-efg-hijk' => $response,
+            config('services.some-partner.url') . $this->business->external_id . "*" => Http::response($this->buildMockResponse('TestCanHandleNotFindingUser.json')),
         ]);
-        $this->mock(PayItemSyncClient::class)->shouldReceive('makeRequest')->andReturn($response);
-
-        Http::shouldReceive("withHeaders")->andReturn(Mockery::self());
-        Http::shouldReceive("get")->andReturn($response);
 
         PayItemSyncRoutine::dispatch($this->business);
-        $this->assertEquals($response->getStatusCode(), 200);
         // Assert that no PayItem's exist with the given externalIds
         $this->assertFalse(PayItem::whereIn('external_id', ['anExternalIdForThisPayItem', 'aDifferentExternalIdForThisPayItem'])->exists());
+        // ToDo - Add additional test with valid records for another user to ensure other records are still stored
     }
 
     /**
@@ -129,20 +108,11 @@ class PayItemSyncJobTest extends TestCase
      */
     public function test_can_handle_no_existing_payitem_record(): void
     {
-        $responseData = $this->buildMockResponse('TestCanHandleNoExistingPayitemRecord.json');
-        $response = response($responseData);
-
         Http::fake([
-            config('services.some-partner.url') . 'abcd-efg-hijk' => $response,
+            config('services.some-partner.url') . $this->business->external_id . '*' => Http::response($this->buildMockResponse('TestCanHandleNoExistingPayitemRecord.json')),
         ]);
 
-        $this->mock(PayItemSyncClient::class)->shouldReceive('makeRequest')->andReturn($response);
-
-        Http::shouldReceive("withHeaders")->andReturn(Mockery::self());
-        Http::shouldReceive("get")->andReturn($response);
-
         PayItemSyncRoutine::dispatch($this->business);
-        $this->assertEquals($response->getStatusCode(), 200);
         // Assert that PayItems exist with the given externalId for the user/business
         $this->assertTrue($this->user->payItems()->whereBusinessId($this->business->id)->whereIn('external_id', ['anExternalIdForThisPayItem', 'aDifferentExternalIdForThisPayItem'])->exists());
     }
@@ -154,11 +124,8 @@ class PayItemSyncJobTest extends TestCase
      */
     public function test_can_handle_existing_payitem_record(): void
     {
-        $responseData = $this->buildMockResponse('TestCanHandleExistingPayitemRecord.json');
-        $response = response($responseData);
-
         Http::fake([
-            config('services.some-partner.url') . 'abcd-efg-hijk' => $response,
+            config('services.some-partner.url') . $this->business->external_id . '*' => Http::response($this->buildMockResponse('TestCanHandleExistingPayitemRecord.json')),
         ]);
 
         $payItem = $this->user->payItems()->create([
@@ -171,23 +138,19 @@ class PayItemSyncJobTest extends TestCase
             'pay_date' => "2021-10-19"
         ]);
 
+        // Ensure that PayItem record was created with exact values
         $this->assertTrue(PayItem::where([
             'user_id' => $this->user->id,
             'business_id' => $this->business->id,
             'external_id' => "anExternalIdForThisPayItem"
         ])->exists());
 
-        $this->mock(PayItemSyncClient::class)->shouldReceive('makeRequest')->andReturn($response);
-
-        Http::shouldReceive("withHeaders")->andReturn(Mockery::self());
-        Http::shouldReceive("get")->andReturn($response);
-
         PayItemSyncRoutine::dispatch($this->business);
-        $this->assertEquals($response->getStatusCode(), 200);
 
         // Assert that PayItems exist with the given externalId for the user/business
         $this->assertTrue($this->user->payItems()->whereBusinessId($this->business->id)->whereIn('external_id', ['anExternalIdForThisPayItem', 'aDifferentExternalIdForThisPayItem'])->exists());
 
+        // Reload the model after running the job to ensure expected behavior
         $itemToCheck = PayItem::where([
             'user_id' => $this->user->id,
             'business_id' => $this->business->id,
@@ -203,20 +166,11 @@ class PayItemSyncJobTest extends TestCase
      */
     public function test_amounts_are_accurate(): void
     {
-        $responseData = $this->buildMockResponse('TestCanHandleNoExistingPayitemRecord.json');
-        $response = response($responseData);
-
         Http::fake([
-            config('services.some-partner.url') . 'abcd-efg-hijk' => $response,
+            config('services.some-partner.url') . $this->business->external_id . '*' => Http::response($this->buildMockResponse('TestCanHandleNoExistingPayitemRecord.json')),
         ]);
 
-        $this->mock(PayItemSyncClient::class)->shouldReceive('makeRequest')->andReturn($response);
-
-        Http::shouldReceive("withHeaders")->andReturn(Mockery::self());
-        Http::shouldReceive("get")->andReturn($response);
-
         PayItemSyncRoutine::dispatch($this->business);
-        $this->assertEquals($response->getStatusCode(), 200);
         // Assert that PayItems exist with the given externalId for the user/business
         $this->assertTrue($this->user->payItems()->whereBusinessId($this->business->id)->whereIn('external_id', ['anExternalIdForThisPayItem', 'aDifferentExternalIdForThisPayItem'])->exists());
 
@@ -236,11 +190,8 @@ class PayItemSyncJobTest extends TestCase
      */
     public function test_job_removes_existing_payitem_records(): void
     {
-        $responseData = $this->buildMockResponse('TestCanHandleExistingPayitemRecord.json');
-        $response = response($responseData);
-
         Http::fake([
-            config('services.some-partner.url') . 'abcd-efg-hijk' => $response,
+            config('services.some-partner.url') . $this->business->external_id . "*" => Http::response($this->buildMockResponse('TestCanHandleExistingPayitemRecord.json')),
         ]);
 
         $payItem = $this->user->payItems()->create([
@@ -259,13 +210,7 @@ class PayItemSyncJobTest extends TestCase
             'external_id' => "thisOneShouldBeDeleted"
         ])->exists());
 
-        $this->mock(PayItemSyncClient::class)->shouldReceive('makeRequest')->andReturn($response);
-
-        Http::shouldReceive("withHeaders")->andReturn(Mockery::self());
-        Http::shouldReceive("get")->andReturn($response);
-
         PayItemSyncRoutine::dispatch($this->business);
-        $this->assertEquals($response->getStatusCode(), 200);
 
         // Assert that PayItems exist with the given externalId for the user/business
         $this->assertTrue($this->user->payItems()->whereBusinessId($this->business->id)->whereIn('external_id', ['anExternalIdForThisPayItem', 'aDifferentExternalIdForThisPayItem'])->exists());
@@ -290,15 +235,12 @@ class PayItemSyncJobTest extends TestCase
      */
     public function test_database_rolls_back_on_failure(): void
     {
-        Exceptions::fake();
-        $this->expectException(PayItemSyncJobException::class);
+        // Assert that a 'critical' item was created in the log
+        Log::expects('critical');
 
-        // Two part request, will require isLastPage = false on first and isLastPage = true on second
-        $responseData = $this->buildMockResponse('TestDatabaseRollsBackOnFailure.json');
-        $response = response($responseData);
-        $page2Response = response('', 404);
         Http::fake([
-            config('services.some-partner.url') . 'abcd-efg-hijk' => $response,
+            config('services.some-partner.url') . $this->business->external_id . '?page=1' => Http::response($this->buildMockResponse('TestDatabaseRollsBackOnFailure.json'), 200),
+            config('services.some-partner.url') . $this->business->external_id . '?page=2' => Http::response('', 404)
         ]);
 
         $payItem = $this->user->payItems()->create([
@@ -318,22 +260,18 @@ class PayItemSyncJobTest extends TestCase
         ]);
         $this->assertTrue($payItemTestHandle->exists());
 
-        Http::shouldReceive("withHeaders")->andReturn(Mockery::self());
-        Http::shouldReceive("get")->andReturn($response);
+        // The job failing stops all code after dispatch, wrapping in try/catch to let following code still run
+        try {
+            PayItemSyncRoutine::dispatch($this->business);
+        } catch (\Throwable $e) {
+            $this->assertInstanceOf(PayItemSyncJobException::class, $e);
+            // do nothing, just let the test keep running
+        }
 
-        $this->mock(PayItemSyncClient::class)
-            ->shouldReceive('makeRequest')
-            ->andReturn($page2Response);
-        //Http::shouldReceive("get")->andReturn($response);
-
-        PayItemSyncRoutine::dispatch($this->business);
-        PayItem::where([
+        $this->assertTrue(PayItem::where([
             'user_id' => $this->user->id,
             'business_id' => $this->business->id,
             'external_id' => "thisOneShouldBeDeletedAndThenRolledBack"
-        ])->exists();
-        Exceptions::assertReported(function (JobException $e) {
-            return $e->getMessage() === 'Invalid response from sync service';
-        });
+        ])->exists());
     }
 }

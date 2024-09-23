@@ -6,6 +6,9 @@ use App\Models\Business;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+//use Illuminate\Http\Response;
+//use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Response;
 
 class PayItemSyncClient
 {
@@ -27,10 +30,14 @@ class PayItemSyncClient
 
     public function makeRequest($page)
     {
-        $response = Http::withHeaders([
+        return Http::withHeaders([
             'x-api-key' => config('services.some-partner.key')
         ])->get($this->scopedUrl(), ['page' => $page]);
+    }
 
+    protected function process($page)
+    {
+        $response = $this->makeRequest($page);
         if ($response->getStatusCode() == 401) {
             Log::alert("Unauthorized response from Sync Job for " . $this->business->external_id);
         }
@@ -38,9 +45,6 @@ class PayItemSyncClient
             Log::critical("Not Found response from Sync Job for " . $this->business->external_id);
         }
         if ($response->getStatusCode() !== 200) {
-            throw new \Exception("Invalid response from sync service");
-        }
-        if ($page == 2 && getenv('APP_ENV') == 'testing') {
             throw new \Exception("Invalid response from sync service");
         }
         return $response;
@@ -53,9 +57,8 @@ class PayItemSyncClient
         $page = 1;
 
         while (true) {
-            $response = $this->makeRequest($page);
-
-            $data = json_decode($response->content(), true);
+            $response = $this->process($page);
+            $data = json_decode($response->body(), true);
             foreach ($data['payItems'] as $payItem) {
                 $this->data[] = $payItem;
             }

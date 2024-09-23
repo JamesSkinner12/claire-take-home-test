@@ -38,10 +38,11 @@ class PayItemSyncRoutine implements ShouldQueue
     public function handle(): void
     {
         try {
+            DB::beginTransaction();
+
             $service = new PayItemSyncClient($this->business);
             $response = $service->collect();
             $wipedUserIds = [];
-            DB::beginTransaction();
 
             foreach ($response as $item) {
                 // If the user cannot be found, ignore record and continue
@@ -70,15 +71,15 @@ class PayItemSyncRoutine implements ShouldQueue
                     ]
                 );
             }
+            DB::commit();
         } catch (\Throwable $e) {
             $this->fail($e->getMessage());
-            throw new PayItemSyncJobException($e->getMessage());
         }
-        DB::commit();
     }
 
     public function failed(\Throwable $e)
     {
         DB::rollBack();
+        throw new PayItemSyncJobException($e->getMessage());
     }
 }
