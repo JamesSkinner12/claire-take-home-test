@@ -44,9 +44,9 @@ class PayItemSyncJobTest extends TestCase
         $this->expectException(PayItemSyncJobException::class);
         $response = response('', 401);
         Http::fake([
-            '192.168.0.171:8080/sync-test/*' => $response,
+            config('services.some-partner.url') . '*' => $response,
         ]);
-        
+
         $business = Business::create([
             'name' => "Testing No Token",
             'external_id' => "abcd-efg-hijk",
@@ -76,9 +76,9 @@ class PayItemSyncJobTest extends TestCase
         $this->expectException(PayItemSyncJobException::class);
         $response = response('', 404);
         Http::fake([
-            '192.168.0.171:8080/sync-test/abcd-efg-hijk' => $response,
+            config('services.some-partner.url') . 'abcd-efg-hijk' => $response,
         ]);
-        
+
         $business = Business::create([
             'name' => "Testing No Token",
             'external_id' => "abcd-efg-hijk",
@@ -106,11 +106,11 @@ class PayItemSyncJobTest extends TestCase
     {
         $responseData = $this->buildMockResponse('TestCanHandleNotFindingUser.json');
         $response = response($responseData);
-        
+
         Http::fake([
-            '192.168.0.171:8080/sync-test/abcd-efg-hijk' => $response,
+            config('services.some-partner.url') . 'abcd-efg-hijk' => $response,
         ]);
-        
+
         $business = Business::create([
             'name' => "Testing No Token",
             'external_id' => "abcd-efg-hijk",
@@ -136,11 +136,11 @@ class PayItemSyncJobTest extends TestCase
     {
         $responseData = $this->buildMockResponse('TestCanHandleNoExistingPayitemRecord.json');
         $response = response($responseData);
-        
+
         Http::fake([
-            '192.168.0.171:8080/sync-test/abcd-efg-hijk' => $response,
+            config('services.some-partner.url') . 'abcd-efg-hijk' => $response,
         ]);
-        
+
         $business = Business::create([
             'name' => "Testing No Token",
             'external_id' => "abcd-efg-hijk",
@@ -174,11 +174,12 @@ class PayItemSyncJobTest extends TestCase
     {
         $responseData = $this->buildMockResponse('TestCanHandleExistingPayitemRecord.json');
         $response = response($responseData);
-        
+
+
         Http::fake([
-            '192.168.0.171:8080/sync-test/abcd-efg-hijk' => $response,
+            config('services.some-partner.url') . 'abcd-efg-hijk' => $response,
         ]);
-        
+
         $business = Business::create([
             'name' => "Testing No Token",
             'external_id' => "abcd-efg-hijk",
@@ -201,7 +202,7 @@ class PayItemSyncJobTest extends TestCase
             'user_id' => $user->id,
             'pay_date' => "2021-10-19"
         ]);
-        
+
         $this->assertTrue(PayItem::where([
             'user_id' => $user->id,
             'business_id' => $business->id,
@@ -224,7 +225,7 @@ class PayItemSyncJobTest extends TestCase
             'business_id' => $business->id,
             'external_id' => "anExternalIdForThisPayItem"
         ])->first();
-        
+
         // Confirm that the record that was actually stored contains the 'date' of the second record in the fixture 
         $this->assertEquals($itemToCheck->pay_date, '2021-10-22');
     }
@@ -236,11 +237,11 @@ class PayItemSyncJobTest extends TestCase
     {
         $responseData = $this->buildMockResponse('TestCanHandleNoExistingPayitemRecord.json');
         $response = response($responseData);
-        
+
         Http::fake([
-            '192.168.0.171:8080/sync-test/abcd-efg-hijk' => $response,
+            config('services.some-partner.url') . 'abcd-efg-hijk' => $response,
         ]);
-        
+
         $business = Business::create([
             'name' => "Testing No Token",
             'external_id' => "abcd-efg-hijk",
@@ -284,11 +285,11 @@ class PayItemSyncJobTest extends TestCase
     {
         $responseData = $this->buildMockResponse('TestCanHandleExistingPayitemRecord.json');
         $response = response($responseData);
-        
+
         Http::fake([
-            '192.168.0.171:8080/sync-test/abcd-efg-hijk' => $response,
+            config('services.some-partner.url') . 'abcd-efg-hijk' => $response,
         ]);
-        
+
         $business = Business::create([
             'name' => "Testing No Token",
             'external_id' => "abcd-efg-hijk",
@@ -311,7 +312,7 @@ class PayItemSyncJobTest extends TestCase
             'user_id' => $user->id,
             'pay_date' => "2021-10-19"
         ]);
-        
+
         $this->assertTrue(PayItem::where([
             'user_id' => $user->id,
             'business_id' => $business->id,
@@ -334,7 +335,7 @@ class PayItemSyncJobTest extends TestCase
             'business_id' => $business->id,
             'external_id' => "anExternalIdForThisPayItem"
         ])->first();
-        
+
         // Confirm that the record that was actually stored contains the 'date' of the second record in the fixture 
         $this->assertEquals($itemToCheck->pay_date, '2021-10-22');
         $this->assertFalse(PayItem::where([
@@ -354,9 +355,9 @@ class PayItemSyncJobTest extends TestCase
         $response = response($responseData);
         $page2Response = response('', 404);
         Http::fake([
-            '192.168.0.171:8080/sync-test/abcd-efg-hijk' => $response,
+            config('services.some-partner.url') . 'abcd-efg-hijk' => $response,
         ]);
-        
+
         $business = Business::create([
             'name' => "Testing No Token",
             'external_id' => "abcd-efg-hijk",
@@ -379,7 +380,7 @@ class PayItemSyncJobTest extends TestCase
             'user_id' => $user->id,
             'pay_date' => "2021-10-19"
         ]);
-        
+
         $this->assertTrue(PayItem::where([
             'user_id' => $user->id,
             'business_id' => $business->id,
@@ -389,11 +390,11 @@ class PayItemSyncJobTest extends TestCase
 
         Http::shouldReceive("withHeaders")->andReturn(Mockery::self());
         Http::shouldReceive("get")->andReturn($response);
-      
+
         $this->mock(PayItemSyncClient::class)
-        ->shouldReceive('makeRequest')
-       // ->with(2)
-        ->andReturn($page2Response);
+            ->shouldReceive('makeRequest')
+            // ->with(2)
+            ->andReturn($page2Response);
         //Http::shouldReceive("get")->andReturn($response);
 
         PayItemSyncRoutine::dispatch($business);

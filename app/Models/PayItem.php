@@ -35,7 +35,7 @@ class PayItem extends Model
         //'business_id',
     ];
 
-    
+
     public function user()
     {
         return $this->belongsTo(User::class);

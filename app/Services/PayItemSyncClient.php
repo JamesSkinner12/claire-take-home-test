@@ -13,8 +13,7 @@ class PayItemSyncClient
     protected $client;
     protected $data;
 
-//    const SYNC_URL = "https://some-partner-website.com/clair-pay-item-sync/";
-    const SYNC_URL = "http://192.168.0.171:8080/sync-test/";
+    const SYNC_URL = "https://some-partner-website.com/clair-pay-item-sync/";
 
     function __construct(Business $business)
     {
@@ -23,13 +22,13 @@ class PayItemSyncClient
 
     public function scopedUrl()
     {
-        return self::SYNC_URL . $this->business->external_id;
+        return config('services.some-partner.url') . $this->business->external_id;
     }
 
     public function makeRequest($page)
     {
         $response = Http::withHeaders([
-            'x-api-key' => getenv('SYNC_PAY_ITEMS_API_KEY')
+            'x-api-key' => config('services.some-partner.key')
         ])->get($this->scopedUrl(), ['page' => $page]);
 
         if ($response->getStatusCode() == 401) {
@@ -58,10 +57,10 @@ class PayItemSyncClient
             $response = $this->makeRequest($page);
 
             $data = json_decode($response->content(), true);
-            foreach ($data['payItems'] as $payItem){
+            foreach ($data['payItems'] as $payItem) {
                 $this->data[] = $payItem;
             }
-            if ($data['isLastPage'] ) {
+            if ($data['isLastPage']) {
                 return $this->data;
             }
             if (!isset($data['isLastPage'])) {
@@ -70,5 +69,4 @@ class PayItemSyncClient
             $page++;
         }
     }
-
 }

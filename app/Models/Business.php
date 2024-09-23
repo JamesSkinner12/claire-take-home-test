@@ -11,7 +11,7 @@ class Business extends Model
     use HasFactory;
 
     protected $table = "businesses";
-    
+
     /**
      * The attributes that are mass assignable.
      *

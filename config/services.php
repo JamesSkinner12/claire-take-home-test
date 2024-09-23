@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'some-partner' => [
+        'url' => "https://some-partner-website.com/clair-pay-item-sync/",
+        'key' => "CLAIR-ABC-123"
+    ]
+
+
 ];

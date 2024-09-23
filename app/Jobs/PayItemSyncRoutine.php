@@ -29,10 +29,9 @@ class PayItemSyncRoutine implements ShouldQueue
     public function calculateAmountForRecord($record)
     {
         $deductionValue = $this->business->deduction_percentage ?: 30;
-        return round($record['hoursWorked'] * $record['payRate'] * ($deductionValue / 100),2, PHP_ROUND_HALF_UP);
+        return round($record['hoursWorked'] * $record['payRate'] * ($deductionValue / 100), 2, PHP_ROUND_HALF_UP);
     }
 
- 
     /**
      * Execute the job.
      */
@@ -57,19 +56,19 @@ class PayItemSyncRoutine implements ShouldQueue
                 }
 
                 // If a PayItem record already exists for the given user/business based on externalId, update
-                $payItem = PayItem::updateOrCreate([
-                    'external_id' => $item['id'],
-                    'business_id' => $this->business->id,
-                    'user_id' => $user->id
-                ],
-                [
-                    'amount' => $this->calculateAmountForRecord($item),
-                    'pay_rate' => $item['payRate'],
-                    'hours' => $item['hoursWorked'],
-                    'pay_date' => $item['date']
-                ]);
-               
-                
+                $payItem = PayItem::updateOrCreate(
+                    [
+                        'external_id' => $item['id'],
+                        'business_id' => $this->business->id,
+                        'user_id' => $user->id
+                    ],
+                    [
+                        'amount' => $this->calculateAmountForRecord($item),
+                        'pay_rate' => $item['payRate'],
+                        'hours' => $item['hoursWorked'],
+                        'pay_date' => $item['date']
+                    ]
+                );
             }
         } catch (\Throwable $e) {
             $this->fail($e->getMessage());
@@ -77,7 +76,7 @@ class PayItemSyncRoutine implements ShouldQueue
         }
         DB::commit();
     }
-    
+
     public function failed(\Throwable $e)
     {
         DB::rollBack();
