@@ -1,0 +1,26 @@
+{
+    "payItems": [
+    {
+        "id": "anExternalIdForThisPayItem",
+        "employeeId": "abcdedfg",
+        "hoursWorked": 4,
+        "payRate": 44,
+        "date": "2021-10-19"
+    },
+    {
+        "id": "anExternalIdForThisPayItem",
+        "employeeId": "abcdedfg",
+        "hoursWorked": 8.5,
+        "payRate": 12.5,
+        "date": "2021-10-22"
+    },
+    {
+        "id": "aDifferentExternalIdForThisPayItem",
+        "employeeId": "abcdedfg",
+        "hoursWorked": 10,
+        "payRate": 8,
+        "date": "2021-10-18"
+    }
+    ],
+    "isLastPage": true
+}
