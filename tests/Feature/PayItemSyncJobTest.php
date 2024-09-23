@@ -5,27 +5,39 @@ namespace Tests\Feature;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 use Mockery;
-use Mockery\MockInterface;
-use App\Services\PayItemSyncClient;
-use Illuminate\Support\Facades\Http;
-use App\Jobs\PayItemSyncRoutine;
 use App\Models\Business;
+use App\Models\User;
+use App\Models\PayItem;
+use App\Services\PayItemSyncClient;
+use App\Jobs\PayItemSyncRoutine;
+use App\Exceptions\PayItemSyncJobException;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Http\Response;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Testing\TestResponse;
-use Illuminate\Queue\ManuallyFailedException as JobException;
-use App\Exceptions\PayItemSyncJobException;
-use App\Models\PayItem;
 
 class PayItemSyncJobTest extends TestCase
 {
     use RefreshDatabase;
+    protected Business $business;
+    protected User $user;
+
     public function setUp(): void
     {
         parent::setUp();
         Http::preventStrayRequests();
+
+        $this->business = Business::create([
+            'name' => "Testing Business",
+            'external_id' => "abcd-efg-hijk",
+            'deduction_percentage' => 40
+        ]);
+
+        $this->user = $this->business->users()->create([
+            'name' => "James",
+            'email' => 'test@testing.com',
+            'password' => 'password',
+            'external_id' => "abcdedfg",
+        ]);
     }
 
     protected function buildMockResponse($filename)
@@ -47,17 +59,12 @@ class PayItemSyncJobTest extends TestCase
             config('services.some-partner.url') . '*' => $response,
         ]);
 
-        $business = Business::create([
-            'name' => "Testing No Token",
-            'external_id' => "abcd-efg-hijk",
-            'deduction_percentage' => 40
-        ]);
-        Log::shouldReceive('alert')->with("Unauthorized response from Sync Job for " . $business->external_id);
+        Log::shouldReceive('alert')->with("Unauthorized response from Sync Job for " . $this->business->external_id);
         $this->mock(PayItemSyncClient::class)->shouldReceive('makeRequest')->andReturn($response);
 
         Http::shouldReceive("withHeaders")->andReturn(Mockery::self());
         Http::shouldReceive("get")->andReturn($response);
-        PayItemSyncRoutine::dispatch($business);
+        PayItemSyncRoutine::dispatch($this->business);
 
         $this->assertEquals($response->getStatusCode(), 401);
         Exceptions::assertReported(function (PayItemSyncJobException $e) {
@@ -79,20 +86,14 @@ class PayItemSyncJobTest extends TestCase
             config('services.some-partner.url') . 'abcd-efg-hijk' => $response,
         ]);
 
-        $business = Business::create([
-            'name' => "Testing No Token",
-            'external_id' => "abcd-efg-hijk",
-            'deduction_percentage' => 40
-        ]);
-        Log::shouldReceive('alert')->with("Not Found response from Sync Job for  " . $business->external_id);
+        Log::shouldReceive('alert')->with("Not Found response from Sync Job for  " . $this->business->external_id);
         $this->mock(PayItemSyncClient::class)->shouldReceive('makeRequest')->andReturn($response);
 
         Http::shouldReceive("withHeaders")->andReturn(Mockery::self());
         Http::shouldReceive("get")->andReturn($response);
 
-        PayItemSyncRoutine::dispatch($business);
+        PayItemSyncRoutine::dispatch($this->business);
         $this->assertEquals($response->getStatusCode(), 404);
-        $this->assertTrue(true);
         Exceptions::assertReported(function (JobException $e) {
             return $e->getMessage() === 'Invalid response from sync service';
         });
@@ -110,18 +111,12 @@ class PayItemSyncJobTest extends TestCase
         Http::fake([
             config('services.some-partner.url') . 'abcd-efg-hijk' => $response,
         ]);
-
-        $business = Business::create([
-            'name' => "Testing No Token",
-            'external_id' => "abcd-efg-hijk",
-            'deduction_percentage' => 40
-        ]);
         $this->mock(PayItemSyncClient::class)->shouldReceive('makeRequest')->andReturn($response);
 
         Http::shouldReceive("withHeaders")->andReturn(Mockery::self());
         Http::shouldReceive("get")->andReturn($response);
 
-        PayItemSyncRoutine::dispatch($business);
+        PayItemSyncRoutine::dispatch($this->business);
         $this->assertEquals($response->getStatusCode(), 200);
         // Assert that no PayItem's exist with the given externalIds
         $this->assertFalse(PayItem::whereIn('external_id', ['anExternalIdForThisPayItem', 'aDifferentExternalIdForThisPayItem'])->exists());
@@ -141,28 +136,15 @@ class PayItemSyncJobTest extends TestCase
             config('services.some-partner.url') . 'abcd-efg-hijk' => $response,
         ]);
 
-        $business = Business::create([
-            'name' => "Testing No Token",
-            'external_id' => "abcd-efg-hijk",
-            'deduction_percentage' => 40
-        ]);
-
-        $user = $business->users()->create([
-            'name' => "James",
-            'email' => 'test@testing.com',
-            'password' => 'password',
-            'external_id' => "abcdedfg",
-        ]);
-
         $this->mock(PayItemSyncClient::class)->shouldReceive('makeRequest')->andReturn($response);
 
         Http::shouldReceive("withHeaders")->andReturn(Mockery::self());
         Http::shouldReceive("get")->andReturn($response);
 
-        PayItemSyncRoutine::dispatch($business);
+        PayItemSyncRoutine::dispatch($this->business);
         $this->assertEquals($response->getStatusCode(), 200);
         // Assert that PayItems exist with the given externalId for the user/business
-        $this->assertTrue($user->payItems()->whereBusinessId($business->id)->whereIn('external_id', ['anExternalIdForThisPayItem', 'aDifferentExternalIdForThisPayItem'])->exists());
+        $this->assertTrue($this->user->payItems()->whereBusinessId($this->business->id)->whereIn('external_id', ['anExternalIdForThisPayItem', 'aDifferentExternalIdForThisPayItem'])->exists());
     }
 
     /**
@@ -175,37 +157,23 @@ class PayItemSyncJobTest extends TestCase
         $responseData = $this->buildMockResponse('TestCanHandleExistingPayitemRecord.json');
         $response = response($responseData);
 
-
         Http::fake([
             config('services.some-partner.url') . 'abcd-efg-hijk' => $response,
         ]);
 
-        $business = Business::create([
-            'name' => "Testing No Token",
-            'external_id' => "abcd-efg-hijk",
-            'deduction_percentage' => 40
-        ]);
-
-        $user = $business->users()->create([
-            'name' => "James",
-            'email' => 'test@testing.com',
-            'password' => 'password',
-            'external_id' => "abcdedfg",
-        ]);
-
-        $payItem = $user->payItems()->create([
+        $payItem = $this->user->payItems()->create([
             'amount' => 10, //purposefully use wrong amount to make sure the value is corrected on update
             'pay_rate' => 12.5,
             'hours' => 8.5,
             'external_id' => "anExternalIdForThisPayItem",
-            'business_id' => $business->id,
-            'user_id' => $user->id,
+            'business_id' => $this->business->id,
+            'user_id' => $this->user->id,
             'pay_date' => "2021-10-19"
         ]);
 
         $this->assertTrue(PayItem::where([
-            'user_id' => $user->id,
-            'business_id' => $business->id,
+            'user_id' => $this->user->id,
+            'business_id' => $this->business->id,
             'external_id' => "anExternalIdForThisPayItem"
         ])->exists());
 
@@ -214,15 +182,15 @@ class PayItemSyncJobTest extends TestCase
         Http::shouldReceive("withHeaders")->andReturn(Mockery::self());
         Http::shouldReceive("get")->andReturn($response);
 
-        PayItemSyncRoutine::dispatch($business);
+        PayItemSyncRoutine::dispatch($this->business);
         $this->assertEquals($response->getStatusCode(), 200);
 
         // Assert that PayItems exist with the given externalId for the user/business
-        $this->assertTrue($user->payItems()->whereBusinessId($business->id)->whereIn('external_id', ['anExternalIdForThisPayItem', 'aDifferentExternalIdForThisPayItem'])->exists());
+        $this->assertTrue($this->user->payItems()->whereBusinessId($this->business->id)->whereIn('external_id', ['anExternalIdForThisPayItem', 'aDifferentExternalIdForThisPayItem'])->exists());
 
         $itemToCheck = PayItem::where([
-            'user_id' => $user->id,
-            'business_id' => $business->id,
+            'user_id' => $this->user->id,
+            'business_id' => $this->business->id,
             'external_id' => "anExternalIdForThisPayItem"
         ])->first();
 
@@ -242,39 +210,24 @@ class PayItemSyncJobTest extends TestCase
             config('services.some-partner.url') . 'abcd-efg-hijk' => $response,
         ]);
 
-        $business = Business::create([
-            'name' => "Testing No Token",
-            'external_id' => "abcd-efg-hijk",
-            'deduction_percentage' => 40
-        ]);
-
-        //$user = User::create([
-        $user = $business->users()->create([
-            'name' => "James",
-            'email' => 'test@testing.com',
-            'password' => 'password',
-            'external_id' => "abcdedfg",
-        ]);
-
         $this->mock(PayItemSyncClient::class)->shouldReceive('makeRequest')->andReturn($response);
 
         Http::shouldReceive("withHeaders")->andReturn(Mockery::self());
         Http::shouldReceive("get")->andReturn($response);
 
-        PayItemSyncRoutine::dispatch($business);
+        PayItemSyncRoutine::dispatch($this->business);
         $this->assertEquals($response->getStatusCode(), 200);
         // Assert that PayItems exist with the given externalId for the user/business
-        $this->assertTrue($user->payItems()->whereBusinessId($business->id)->whereIn('external_id', ['anExternalIdForThisPayItem', 'aDifferentExternalIdForThisPayItem'])->exists());
-
+        $this->assertTrue($this->user->payItems()->whereBusinessId($this->business->id)->whereIn('external_id', ['anExternalIdForThisPayItem', 'aDifferentExternalIdForThisPayItem'])->exists());
 
         $itemToCheck = PayItem::where([
-            'user_id' => $user->id,
-            'business_id' => $business->id,
+            'user_id' => $this->user->id,
+            'business_id' => $this->business->id,
             'external_id' => "anExternalIdForThisPayItem"
         ])->first();
 
         // Manually calculate what the amount should be to guarantee calculation is correct
-        $calculatedAmount = round((8.5 * 12.5 * ($business->deduction_percentage / 100)), 2);
+        $calculatedAmount = round((8.5 * 12.5 * ($this->business->deduction_percentage / 100)), 2);
         $this->assertEquals($itemToCheck->amount, $calculatedAmount);
     }
 
@@ -290,32 +243,19 @@ class PayItemSyncJobTest extends TestCase
             config('services.some-partner.url') . 'abcd-efg-hijk' => $response,
         ]);
 
-        $business = Business::create([
-            'name' => "Testing No Token",
-            'external_id' => "abcd-efg-hijk",
-            'deduction_percentage' => 40
-        ]);
-
-        $user = $business->users()->create([
-            'name' => "James",
-            'email' => 'test@testing.com',
-            'password' => 'password',
-            'external_id' => "abcdedfg",
-        ]);
-
-        $payItem = $user->payItems()->create([
+        $payItem = $this->user->payItems()->create([
             'amount' => 10,
             'pay_rate' => 12.5,
             'hours' => 8.5,
             'external_id' => "thisOneShouldBeDeleted",
-            'business_id' => $business->id,
-            'user_id' => $user->id,
+            'business_id' => $this->business->id,
+            'user_id' => $this->user->id,
             'pay_date' => "2021-10-19"
         ]);
 
         $this->assertTrue(PayItem::where([
-            'user_id' => $user->id,
-            'business_id' => $business->id,
+            'user_id' => $this->user->id,
+            'business_id' => $this->business->id,
             'external_id' => "thisOneShouldBeDeleted"
         ])->exists());
 
@@ -324,23 +264,23 @@ class PayItemSyncJobTest extends TestCase
         Http::shouldReceive("withHeaders")->andReturn(Mockery::self());
         Http::shouldReceive("get")->andReturn($response);
 
-        PayItemSyncRoutine::dispatch($business);
+        PayItemSyncRoutine::dispatch($this->business);
         $this->assertEquals($response->getStatusCode(), 200);
 
         // Assert that PayItems exist with the given externalId for the user/business
-        $this->assertTrue($user->payItems()->whereBusinessId($business->id)->whereIn('external_id', ['anExternalIdForThisPayItem', 'aDifferentExternalIdForThisPayItem'])->exists());
+        $this->assertTrue($this->user->payItems()->whereBusinessId($this->business->id)->whereIn('external_id', ['anExternalIdForThisPayItem', 'aDifferentExternalIdForThisPayItem'])->exists());
 
         $itemToCheck = PayItem::where([
-            'user_id' => $user->id,
-            'business_id' => $business->id,
+            'user_id' => $this->user->id,
+            'business_id' => $this->business->id,
             'external_id' => "anExternalIdForThisPayItem"
         ])->first();
 
         // Confirm that the record that was actually stored contains the 'date' of the second record in the fixture 
         $this->assertEquals($itemToCheck->pay_date, '2021-10-22');
         $this->assertFalse(PayItem::where([
-            'user_id' => $user->id,
-            'business_id' => $business->id,
+            'user_id' => $this->user->id,
+            'business_id' => $this->business->id,
             'external_id' => "thisOneShouldBeDeleted"
         ])->exists());
     }
@@ -350,6 +290,9 @@ class PayItemSyncJobTest extends TestCase
      */
     public function test_database_rolls_back_on_failure(): void
     {
+        Exceptions::fake();
+        $this->expectException(PayItemSyncJobException::class);
+
         // Two part request, will require isLastPage = false on first and isLastPage = true on second
         $responseData = $this->buildMockResponse('TestDatabaseRollsBackOnFailure.json');
         $response = response($responseData);
@@ -358,45 +301,39 @@ class PayItemSyncJobTest extends TestCase
             config('services.some-partner.url') . 'abcd-efg-hijk' => $response,
         ]);
 
-        $business = Business::create([
-            'name' => "Testing No Token",
-            'external_id' => "abcd-efg-hijk",
-            'deduction_percentage' => 40
-        ]);
-
-        $user = $business->users()->create([
-            'name' => "James",
-            'email' => 'test@testing.com',
-            'password' => 'password',
-            'external_id' => "abcdedfg",
-        ]);
-
-        $payItem = $user->payItems()->create([
+        $payItem = $this->user->payItems()->create([
             'amount' => 10,
             'pay_rate' => 12.5,
             'hours' => 8.5,
             'external_id' => "thisOneShouldBeDeletedAndThenRolledBack",
-            'business_id' => $business->id,
-            'user_id' => $user->id,
+            'business_id' => $this->business->id,
+            'user_id' => $this->user->id,
             'pay_date' => "2021-10-19"
         ]);
 
-        $this->assertTrue(PayItem::where([
-            'user_id' => $user->id,
-            'business_id' => $business->id,
+        $payItemTestHandle = PayItem::where([
+            'user_id' => $this->user->id,
+            'business_id' => $this->business->id,
             'external_id' => "thisOneShouldBeDeletedAndThenRolledBack"
-        ])->exists());
-
+        ]);
+        $this->assertTrue($payItemTestHandle->exists());
 
         Http::shouldReceive("withHeaders")->andReturn(Mockery::self());
         Http::shouldReceive("get")->andReturn($response);
 
         $this->mock(PayItemSyncClient::class)
             ->shouldReceive('makeRequest')
-            // ->with(2)
             ->andReturn($page2Response);
         //Http::shouldReceive("get")->andReturn($response);
 
-        PayItemSyncRoutine::dispatch($business);
+        PayItemSyncRoutine::dispatch($this->business);
+        PayItem::where([
+            'user_id' => $this->user->id,
+            'business_id' => $this->business->id,
+            'external_id' => "thisOneShouldBeDeletedAndThenRolledBack"
+        ])->exists();
+        Exceptions::assertReported(function (JobException $e) {
+            return $e->getMessage() === 'Invalid response from sync service';
+        });
     }
 }

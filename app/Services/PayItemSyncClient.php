@@ -53,7 +53,6 @@ class PayItemSyncClient
         $page = 1;
 
         while (true) {
-            echo $page . "\n";
             $response = $this->makeRequest($page);
 
             $data = json_decode($response->content(), true);
