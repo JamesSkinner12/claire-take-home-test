@@ -23,12 +23,22 @@ class Business extends Model
         'deduction_percentage',
         'enabled'
     ];
-
+    
+    /**
+     * Fetch the users associated with the business.
+     *
+     * @return BelongsToMany
+     */
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'user_businesses');
     }
-
+    
+    /**
+     * Fetch the pay items associated with the business.
+     *
+     * @return void
+     */
     public function payItems()
     {
         return $this->hasMany(PayItem::class, 'business_id');

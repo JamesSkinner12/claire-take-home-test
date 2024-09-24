@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
@@ -47,12 +48,22 @@ class User extends Authenticatable
         ];
     }
 
+    /**
+     * Fetch the businesses associated with the user.
+     *
+     * @return HasManyThrough
+     */
     public function businesses(): HasManyThrough
     {
         return $this->hasManyThrough(Business::class, UserBusiness::class, 'user_id', 'id', 'id', 'id');
     }
 
-    public function payItems()
+    /**
+     * Fetch the pay items associated with the user.
+     *
+     * @return HasMany
+     */
+    public function payItems(): HasMany
     {
         return $this->hasMany(PayItem::class);
     }

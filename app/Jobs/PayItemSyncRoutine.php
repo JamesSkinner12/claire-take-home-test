@@ -3,14 +3,10 @@
 namespace App\Jobs;
 
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Queue\SerializesModels;
 use App\Models\Business;
 use App\Services\PayItemSyncClient;
 use App\Exceptions\PayItemSyncJobException;
-use App\Models\User;
 use App\Models\PayItem;
 use Illuminate\Support\Facades\DB;
 
@@ -24,12 +20,6 @@ class PayItemSyncRoutine implements ShouldQueue
     public function __construct(public Business $business)
     {
         $this->business = $business;
-    }
-
-    public function calculateAmountForRecord($record)
-    {
-        $deductionValue = $this->business->deduction_percentage ?: 30;
-        return round($record['hoursWorked'] * $record['payRate'] * ($deductionValue / 100), 2, PHP_ROUND_HALF_UP);
     }
 
     /**
@@ -64,7 +54,7 @@ class PayItemSyncRoutine implements ShouldQueue
                         'user_id' => $user->id
                     ],
                     [
-                        'amount' => $this->calculateAmountForRecord($item),
+                        'amount' => PayItem::calculateAmount($this->business, $item['payRate'], $item['hoursWorked']),
                         'pay_rate' => $item['payRate'],
                         'hours' => $item['hoursWorked'],
                         'pay_date' => $item['date']
@@ -76,7 +66,13 @@ class PayItemSyncRoutine implements ShouldQueue
             $this->fail($e->getMessage());
         }
     }
-
+    
+    /**
+     * Runs when job fails
+     *
+     * @param  \Throwable $e
+     * @return void
+     */
     public function failed(\Throwable $e)
     {
         DB::rollBack();
