@@ -5,17 +5,12 @@ namespace App\Services;
 use App\Models\Business;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Http\Client\Response as HttpResponse;
-use Illuminate\Support\Facades\Response;
+use Illuminate\Http\Client\Response;
 
 class PayItemSyncClient
 {
     protected $business;
-    protected $client;
     protected $data;
-
-    const SYNC_URL = "https://some-partner-website.com/clair-pay-item-sync/";
 
     function __construct(Business $business)
     {
@@ -33,7 +28,7 @@ class PayItemSyncClient
      * @param  int $page
      * @return \Illuminate\Http\Client\Response
      */
-    public function makeRequest(int $page): HttpResponse
+    public function makeRequest(int $page): Response
     {
         return Http::withHeaders([
             'x-api-key' => config('services.some-partner.key')
@@ -46,7 +41,7 @@ class PayItemSyncClient
      * @param  int $page
      * @return \Illuminate\Http\Client\Response
      */
-    protected function process(int $page): HttpResponse
+    protected function process(int $page): Response
     {
         $response = $this->makeRequest($page);
         if ($response->getStatusCode() == 401) {

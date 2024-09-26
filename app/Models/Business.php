@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Business extends Model
 {
@@ -37,9 +38,9 @@ class Business extends Model
     /**
      * Fetch the pay items associated with the business.
      *
-     * @return void
+     * @return HasMany
      */
-    public function payItems()
+    public function payItems(): HasMany
     {
         return $this->hasMany(PayItem::class, 'business_id');
     }
